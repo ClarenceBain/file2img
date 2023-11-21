@@ -83,9 +83,9 @@ def decode(file, name):
             ext = image.info["root"]                                                            # get the files original extension 
             start = time.time()
             
-            for p in pixels:
-                get_progress(p, len(pixels), start)                                                    
-                data.write(get_hex(p))                                                          # turn the pixels into bytes and add them to the buffer we created
+            for i, pixel in enumerate(pixels):
+                get_progress(i, len(pixels), start)                                                    
+                data.write(get_hex(pixel))                                                      # turn the pixels into bytes and add them to the buffer we created
         
             length = data.tell()                                                                # get the size of the buffer
             index = 0
