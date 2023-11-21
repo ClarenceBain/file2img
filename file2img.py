@@ -9,7 +9,10 @@ from PIL import Image, PngImagePlugin
 
 modes = {"encode": 0, "decode": 1}
 channels = {"rgb": 3, "rgba": 4}
-root = base64.b64encode("root".encode("utf-8"))
+
+# if someone were to stumble across this file lets at least try to hide some of this information (because why not)
+# obviously not foolproof but the average user wouldn't be able to tell if they had looked at the png in a text editor
+root, ogs, chann = base64.b64encode("root".encode("utf-8")), base64.b64encode("ofs".encode("utf-8")), base64.b64encode("channel".encode("utf-8"))
 
 # function to get the bytes of the file
 def get_bytes(file):
@@ -50,9 +53,6 @@ def get_progress(index, total, start):
         
         print(f"Progress: {index}/{total} {percent:.2f}% {time.strftime('%I:%M:%S %p', time.localtime(time.time() + remaining))}", end="\r")
     
-    if index == total - 1:
-        print()                                                 # stops the previous print from bleeding into future prints
-    
 # function to essentially plot the bytes to the png
 def get_pixels(bytes, channel):
     pixels = []
@@ -81,12 +81,13 @@ def encode(file, name, channel):
         
         pinfo = PngImagePlugin.PngInfo()                                                        # since png doesn't use exif we need to use this, tEXt did not work for some reason
         pinfo.add_itxt(root, base64.b64encode(os.path.splitext(file)[1].lower().encode("utf-8")))
-        pinfo.add_itxt("ofs", str(len(data)))
-        pinfo.add_itxt("channel", str(channel))
+        pinfo.add_itxt(ogs, str(len(data)))
+        pinfo.add_itxt(chann, str(channel))
         
         if not os.path.exists(str(file).replace(f.name, f"f2i{channel}")):
             os.makedirs(str(file).replace(f.name, f"f2i{channel}"))                             # if the directory doesn't exist, create it (this will store the encoded files)
         
+        print()                                                                                 # bad way to stop progress from bleeding into the print below but it works :?
         print(f"Image created with {len(pixels)} pixels","\n")
         image.save(str(file).replace(f.name, f"f2i{channel}/" + name + ".png"), pnginfo=pinfo)  # create the image
     except FileNotFoundError:
@@ -101,11 +102,11 @@ def decode(file, name):
         ofs = 0
         channel = 0
         
-        if image.info["ofs"] is not None:
-            ofs = int(image.info["ofs"])
+        if image.info[ogs.decode("utf-8")] is not None:
+            ofs = int(image.info[ogs.decode("utf-8")])
         
-        if image.info["channel"] is not None:
-            channel = int(image.info["channel"])
+        if image.info[chann.decode("utf-8")] is not None:
+            channel = int(image.info[chann.decode("utf-8")])
                 
         if image.info[root.decode("utf-8")] is not None:                                        # check if the png we are interacting with was created with f2i
             ext = base64.b64decode(image.info[root.decode("utf-8")]).decode("utf-8")            # get the files original extension 
@@ -122,7 +123,8 @@ def decode(file, name):
                 if i > ofs:                                                                     # more efficient than previous method, no data loss (checks if any data is past the original files size)
                     index = i - 1
                     break
-                       
+            
+            print()                                                                             # bad way to stop progress from bleeding into the print below but it works :?  
             print(f"Removed {length - index} of excess data", "\n")                          
             data.truncate(index)                                                                # remove all extra data
         
