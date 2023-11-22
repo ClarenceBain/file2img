@@ -20,7 +20,7 @@ def get_bytes(file):
         return data.read()
 
 # function to calculate the x dimension of the png
-def get_dim(file):
+def get_dim(file, channel):
     size = len(get_bytes(file))                                 # get total bytes (file size)
     bits = size * 8                                             # get the total amount of bits, 8 bits per byte
     return math.ceil(math.sqrt(bits / channel))                 # use math.ceil to round up for safety, get the square root of the bits / 3 (3 channels in rgb)
@@ -69,7 +69,7 @@ def encode(file, name, channel):
     try:
         data = get_bytes(file)                                                                  # the bytes of the file
         pixels = get_pixels(data, channel)                                                      # essentially the plotted pixels on the png
-        x = get_dim(file)                                                                       # the x dimension of the png
+        x = get_dim(file, channel)                                                              # the x dimension of the png
         y = math.ceil(x / 8)                                                                    # the y dimension of the png, divided by 8 to remove unused space
         
         if channel == 4:
