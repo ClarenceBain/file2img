@@ -131,9 +131,10 @@ def decode(file, name):
             with open(str(file).replace(file.name, name + ext), "wb") as f:
                 f.write(data.getvalue())       
         else:
-            print()                                                                                 # bad way to stop progress from bleeding into the print below but it works :?  
+            print()                                                                             # bad way to stop progress from bleeding into the print below but it works :?  
             print(f"Skipping {str(file.name)} because its not a valid f2i png or its corrupted!", "\n")
-            data.close()
+        
+        data.close()
             
     except FileNotFoundError:
         raise FileNotFoundError("File could not be found!")
