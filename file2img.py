@@ -102,13 +102,13 @@ def decode(file, name):
         ofs = 0
         channel = 0
         
-        if image.info[ogs.decode("utf-8")] is not None:
+        if ogs.decode("utf-8") in image.info and image.info[ogs.decode("utf-8")]:
             ofs = int(image.info[ogs.decode("utf-8")])
         
-        if image.info[chann.decode("utf-8")] is not None:
+        if chann.decode("utf-8") in image.info and image.info[chann.decode("utf-8")] is not None:
             channel = int(image.info[chann.decode("utf-8")])
                 
-        if image.info[root.decode("utf-8")] is not None:                                        # check if the png we are interacting with was created with f2i
+        if root.decode("utf-8") in image.info and image.info[root.decode("utf-8")] is not None: 
             ext = base64.b64decode(image.info[root.decode("utf-8")]).decode("utf-8")            # get the files original extension 
             start = time.time()
             
@@ -129,8 +129,10 @@ def decode(file, name):
             data.truncate(index)                                                                # remove all extra data
         
             with open(str(file).replace(file.name, name + ext), "wb") as f:
-                f.write(data.getvalue())
-        
+                f.write(data.getvalue())       
+        else:
+            print()                                                                                 # bad way to stop progress from bleeding into the print below but it works :?  
+            print(f"Skipping {str(file.name)} because its not a valid f2i png or its corrupted!", "\n")
             data.close()
             
     except FileNotFoundError:
