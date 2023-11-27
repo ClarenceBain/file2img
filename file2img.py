@@ -9,10 +9,11 @@ from PIL import Image, PngImagePlugin
 
 modes = {"encode": 0, "decode": 1}
 channels = {"rgb": 3, "rgba": 4}
+version = 1.8
 
 # if someone were to stumble across this file lets at least try to hide some of this information (because why not)
 # obviously not foolproof but the average user wouldn't be able to tell if they had looked at the png in a text editor
-root, ogs, chann = base64.b64encode("root".encode("utf-8")), base64.b64encode("ofs".encode("utf-8")), base64.b64encode("channel".encode("utf-8"))
+root, ogs, chann, vers = base64.b64encode("root".encode("utf-8")), base64.b64encode("ofs".encode("utf-8")), base64.b64encode("channel".encode("utf-8")), base64.b64encode("version".encode("utf-8"))
 
 # function to get the bytes of the file
 def get_bytes(file):
@@ -26,10 +27,18 @@ def get_dim(file, channel):
     return math.ceil(math.sqrt(bits / channel))                 # use math.ceil to round up for safety, get the square root of the bits / 3 (3 channels in rgb)
 
 # function to turn an rgb value into bytes
-def get_hex(rgb, channel):
-    if channel == 4:
-        return codecs.decode("{:02X}{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2], rgb[3]), 'hex_codec')
-    return codecs.decode("{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2]), 'hex_codec')
+def get_hex(rgb, channel, verz):
+    # idk why i didnt just use a ternary before, probably because i hate long one liners
+    hex = codecs.decode("{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2]), 'hex_codec') if channel == 3 else codecs.decode("{:02X}{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2], rgb[3]), 'hex_codec')
+    if verz > 0:                                                # support for files converted before 1.8        
+        tmp = list(hex)
+            
+        tmp[0], tmp[channel - 1] = tmp[channel - 1], tmp[0]     # unswap bytes
+        tmp[0], tmp[1] = tmp[1], tmp[0]                         # unswap bytes
+        
+        return bytes(tmp)
+    else:
+        return hex
 
 # function to get an rgb value from bytes
 def get_rgb(bytes, channel):
@@ -38,10 +47,15 @@ def get_rgb(bytes, channel):
     while len(hex) % (channel * 2) != 0:                            # if the hex color doesn't contain the respected amount of bytes for its channel then its not complete and needs padding
         hex += "FF"                                                 # pad unfinished hex colors with white (FF)
     
-    if channel == 4:
-        return tuple(int(hex[i:i+2], 16) for i in (0, 2, 4, 6))     # convert the hex color string into (r, g, b, a) value
+    tmp = [hex[i:i+2] for i in range(0, len(hex), 2)]               # turn byte string into a list
+        
+    tmp[0], tmp[1] = tmp[1], tmp[0]                                 # swap bytes, add a bit of more obfuscation to avoid someone from converting pixels to bytes on their own time
+    tmp[0], tmp[channel - 1] = tmp[channel - 1], tmp[0]             # swap bytes, add a bit of more obfuscation to avoid someone from converting pixels to bytes on their own time
     
-    return tuple(int(hex[i:i+2], 16) for i in (0, 2, 4))            # convert the hex color string into (r, g, b) value
+    hex = "".join(tmp)
+    
+    # ternary because cleaner (imo)
+    return tuple(int(hex[i:i+2], 16) for i in (0, 2, 4)) if channel == 3 else tuple(int(hex[i:i+2], 16) for i in (0, 2, 4, 6))
 
 # function to print progress and eta
 def get_progress(index, total, start):
@@ -83,6 +97,7 @@ def encode(file, name, channel):
         pinfo.add_itxt(root, base64.b64encode(os.path.splitext(file)[1].lower().encode("utf-8")))
         pinfo.add_itxt(ogs, str(len(data)))
         pinfo.add_itxt(chann, str(channel))
+        pinfo.add_itxt(vers, str(version))                                                      
         
         if not os.path.exists(str(file).replace(f.name, f"f2i{channel}")):
             os.makedirs(str(file).replace(f.name, f"f2i{channel}"))                             # if the directory doesn't exist, create it (this will store the encoded files)
@@ -101,12 +116,16 @@ def decode(file, name):
         pixels = image.getdata()                                                                # get the pixels of the image
         ofs = 0
         channel = 0
+        verz = 0
         
         if ogs.decode("utf-8") in image.info and image.info[ogs.decode("utf-8")]:
             ofs = int(image.info[ogs.decode("utf-8")])
         
         if chann.decode("utf-8") in image.info and image.info[chann.decode("utf-8")] is not None:
             channel = int(image.info[chann.decode("utf-8")])
+        
+        if vers.decode("utf-8") in image.info and image.info[vers.decode("utf-8")] is not None:
+            verz = version                                                                      # lazy
                 
         if root.decode("utf-8") in image.info and image.info[root.decode("utf-8")] is not None: 
             ext = base64.b64decode(image.info[root.decode("utf-8")]).decode("utf-8")            # get the files original extension 
@@ -114,7 +133,7 @@ def decode(file, name):
             
             for i, pixel in enumerate(pixels):
                 get_progress(i, len(pixels), start)                                                    
-                data.write(get_hex(pixel, channel))                                             # turn the pixels into bytes and add them to the buffer we created
+                data.write(get_hex(pixel, channel, verz))                                       # turn the pixels into bytes and add them to the buffer we created
         
             length = data.tell()                                                                # get the size of the buffer
             index = 0
