@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from PIL import Image, PngImagePlugin
 
+Image.MAX_IMAGE_PIXELS = None
+
 modes = {"encode": 0, "decode": 1}
 channels = {"rgb": 3, "rgba": 4}
 version = 1.8
