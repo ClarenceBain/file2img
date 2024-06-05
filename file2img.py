@@ -1,17 +1,12 @@
 import base64
-import code
 import codecs
 import io
 import math
-from msilib.schema import File
 import os
 import random
-import select
-import time
 import tkinter as tk
 from tkinter import filedialog
 import dearpygui.dearpygui as dpg
-from pathlib import Path
 from PIL import Image, PngImagePlugin
 
 color_channels = ["RGB", "RGBA"]
@@ -20,6 +15,8 @@ max_image_pixels = None
 should_encode = True
 obfuscate_pixels = True
 script_version = 2
+example_hex = "AABBCC"
+example_swapped_hex = "AABBCC"
 
 swap = None
 swap_information = None
@@ -52,12 +49,27 @@ def GetCurrentChannelString():
 def OpenFile():
     global select_file
     global select_file_version
+    global swap
+    global swap_information
+    global example_hex
+    global example_swapped_hex
     
     select_file_version = None
+    swap = None
+    swap_information = None
+    example_hex = "AABBCC" if current_channel == 3 else "AABBCCDD"
+    example_swapped_hex = "AABBCC" if current_channel == 3 else "AABBCCDD"
+    dpg.set_value("current_swapinfo_text", "Swap Information: " + str(swap_information))
+    dpg.set_value("easy_logger", "")
+    dpg.set_value("ex_swap_hex", example_hex + " becomes " + example_swapped_hex)
 
     root = tk.Tk()
     root.withdraw()
     select_file = filedialog.askopenfilename()
+    if select_file == "" or select_file is None:
+        select_file = None
+        root.destroy()
+        return
     root.destroy()
     
     dpg.set_value("current_file_text", "File: " + select_file + "\nFile Size: " + str(len(GetFileBytes(select_file))))
@@ -65,6 +77,8 @@ def OpenFile():
     dpg.show_item("current_swapinfo_text")
     dpg.show_item("easy_logger")
     dpg.show_item("information_logger")
+    dpg.show_item("reswap_button")
+    dpg.show_item("ex_swap_hex")
     
     if ".png" in os.path.basename(select_file):
         image = Image.open(select_file)
@@ -76,6 +90,8 @@ def OpenFile():
             dpg.set_value("current_file_text", "Image: " + select_file + "\nImage Size: " + str(len(GetFileBytes(select_file))) + "\nImage Pixels: " + str(len(pixels)) + "\nfile2img Version: " + version or "None")
             dpg.set_item_label("convert_or_decode_button", "Revert")
             dpg.set_item_callback("convert_or_decode_button", ImageToFile)
+            dpg.hide_item("ex_swap_hex")
+            dpg.hide_item("reswap_button")
             select_file_version = int(version)
         elif "cm9vdA==" in image.info and image.info.get("cm9vdA==") is not None:
              if "dmVyc2lvbg==" in image.info and image.info.get("dmVyc2lvbg==") is not None:
@@ -84,30 +100,43 @@ def OpenFile():
              elif "b2Zz" in image.info and image.info.get("b2Zz") is not None:
                  version = "-1 (converted before versions were stored with f2i images)"
                  select_file_version = 0
+                 dpg.hide_item("current_swapinfo_text")
+                 dpg.hide_item("ex_swap_hex")
+                 dpg.hide_item("reswap_button")
              dpg.set_value("current_file_text", "Image: " + select_file + "\nImage Size: " + str(len(GetFileBytes(select_file))) + "\nImage Pixels: " + str(len(pixels)) + "\nfile2img Version: " + version or "None")
              dpg.set_item_label("convert_or_decode_button", "Revert")
              dpg.set_item_callback("convert_or_decode_button", ImageToFile)
-        
+             dpg.hide_item("ex_swap_hex")
+             dpg.hide_item("reswap_button")
+             
         if select_file_version is not None and select_file_version >= 2:
-            
             dpg.set_value("current_swapinfo_text", "Swap Information: " + (b64decode(image.info.get("Y3Nk")) if image.info.get("Y3Nk") is not None else image.info.get("csd") if image.info.get("csd") is not None else "None"))
-        
+       
         image.close()
     else:
         dpg.set_value("current_file_text", "File: " + select_file + "\nFile Size: " + str(len(GetFileBytes(select_file))))
         dpg.set_item_label("convert_or_decode_button", "Convert")
-        dpg.set_item_callback("convert_or_decode_button", FileToImage)       
+        dpg.set_item_callback("convert_or_decode_button", FileToImage)
             
 def UpdateChannel(Sender):
     global current_channel
+    global example_hex
+    global example_swapped_hex
 
     if dpg.get_value(Sender) == "RGB":
         current_channel = 3
+        example_hex = "AABBCC"
+        example_swapped_hex = "AABBCC"
     if dpg.get_value(Sender) == "RGBA":
         current_channel = 4
+        example_hex = "AABBCCDD"
+        example_swapped_hex = "AABBCCDD"
     else:
         current_channel = 3
+        example_hex = "AABBCC"
+        example_swapped_hex = "AABBCC"
     
+    dpg.set_value("ex_swap_hex", example_hex + " becomes " + example_swapped_hex)
     dpg.set_value("current_channel_text", "Current Channel: " + GetCurrentChannelString())
 
 def UpdateEncode(Sender):
@@ -145,6 +174,36 @@ def b64decode(b64):
         
     
 ## image stuff
+
+def Swap():
+    global swap
+    global swap_information
+    global example_swapped_hex
+    
+    swap = None
+    swap_information = None
+    
+    pseudo = example_hex
+    tmp = []
+    swap = []
+    
+    for byte in range(0, len(pseudo), 2):
+        tmp.append(pseudo[byte:byte+2])
+        
+    while len(swap) == 0:
+        swap.clear()
+        for original in range(len(tmp)):
+            new = random.randint(0, len(tmp) - 1)
+            swap.append((original, new))
+        for original, new in swap:
+            tmp[original], tmp[new] = tmp[new], tmp[original]
+            
+    swap_information = ",".join([f"{original}->{new}" for original, new in swap])
+    example_swapped_hex = "".join(tmp)
+
+    dpg.set_value("current_swapinfo_text", "Swap Information: " + str(swap_information))
+    dpg.set_value("ex_swap_hex", example_hex + " becomes " + example_swapped_hex)
+    
 
 def GetFileBytes(file):
     with open(file, "rb") as data:
@@ -209,32 +268,25 @@ def BytesToColor(byte_data):
     while len(hex_color) % (current_channel * 2) != 0:
         hex_color += "FF"
     
-    tmp_list = []
+    tmp = []
     
     for byte in range(0, len(hex_color), 2):
-        tmp_list.append(hex_color[byte:byte+2])
+        tmp.append(hex_color[byte:byte+2])
             
     if swap == None and obfuscate_pixels:
-        swap = []
-        
-        while len(swap) == 0:
-            swap.clear()
-            for original in range(len(tmp_list)):
-                new = random.randint(0, len(tmp_list) - 1)
-                swap.append((original, new))
-                Log("Swapping..")
-            for original, new in swap:
-                tmp_list[original], tmp_list[new] = tmp_list[new], tmp_list[original]
-            
+        while example_hex == example_swapped_hex:
+            Swap()
+        for original, new in swap:
+            tmp[original], tmp[new] = tmp[new], tmp[original]
     elif swap and obfuscate_pixels:
         for original, new in swap:
-            tmp_list[original], tmp_list[new] = tmp_list[new], tmp_list[original]
+            tmp[original], tmp[new] = tmp[new], tmp[original]
     
     if obfuscate_pixels and swap_information == None:
         swap_information = ",".join([f"{original}->{new}" for original, new in swap])
     dpg.set_value("current_swapinfo_text", "Swap Information: " + str(swap_information))
                 
-    hex_color = "".join(tmp_list)
+    hex_color = "".join(tmp)
 
     return HexToColorTuple(hex_color)
 
@@ -258,6 +310,7 @@ def FileToImage():
     if select_file is not None:
         file_data = GetFileBytes(select_file)
         Log("Starting conversion for " + os.path.basename(select_file))
+        dpg.hide_item("reswap_button")
         x, y = GetNewImageDimensions(select_file)
         Log("Creating picture with dimensions: " + str(x) + "x" + str(y))
         file_extension = os.path.splitext(select_file)[1].lower()
@@ -300,6 +353,7 @@ def FileToImage():
         
         image.save(select_file.replace(os.path.basename(select_file), f"f2i{current_channel}/" + os.path.basename(select_file) + ".png"), pnginfo=png_info)
         Log("Finished.")
+        dpg.show_item("reswap_button")
         image.close()
 
 def ImageToFile():
@@ -346,7 +400,7 @@ def ImageToFile():
         file_data.close()
             
 dpg.create_context()
-dpg.create_viewport(title="file2img", resizable=False, width=600, height=520)
+dpg.create_viewport(title="file2img", resizable=False, width=600, height=540)
 dpg.setup_dearpygui()
 
 with dpg.window(tag="main"):
@@ -359,13 +413,18 @@ with dpg.window(tag="main"):
         with dpg.tab(label="Home"):
             dpg.add_text("There is currently no file selected. Go to File -> Open.. to select a file.", tag="current_file_text")
             dpg.add_text("Swap Information: " + str(swap_information), tag="current_swapinfo_text")
-            dpg.add_button(label="Convert", callback=FileToImage, tag="convert_or_decode_button")
+            dpg.add_text(example_hex + " becomes " + example_swapped_hex, tag="ex_swap_hex")
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="Convert", callback=FileToImage, tag="convert_or_decode_button")
+                dpg.add_button(label="Pre-Swap", callback=Swap, tag="reswap_button")
             dpg.add_input_text(tag="easy_logger", multiline=True, width=580, height=300, readonly=True)
             dpg.add_text("", tag="information_logger")
             dpg.hide_item("convert_or_decode_button")
             dpg.hide_item("current_swapinfo_text")
             dpg.hide_item("easy_logger")
             dpg.hide_item("information_logger")
+            dpg.hide_item("reswap_button")
+            dpg.hide_item("ex_swap_hex")
                     
         with dpg.tab(label="Settings"):
             dpg.add_text("Current Channel: " + GetCurrentChannelString(), tag="current_channel_text")
